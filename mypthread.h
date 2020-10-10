@@ -1,8 +1,8 @@
 // File:	mypthread_t.h
 
-// List all group member's name:
-// username of iLab:
-// iLab Server:
+// List all group member's name: Krishna Prajapati, Rakshay Kanthadai
+// username of iLab: kjp189, rsk146
+// iLab Server: 
 
 #ifndef MYTHREAD_T_H
 #define MYTHREAD_T_H
@@ -11,7 +11,7 @@
 
 /* To use Linux pthread Library in Benchmark, you have to comment the USE_MYTHREAD macro */
 #define USE_MYTHREAD 1
-
+#define STACK_SIZE SIGSTKSZ
 /* include lib header files that you need here: */
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -20,6 +20,8 @@
 #include <stdlib.h>
 
 typedef uint mypthread_t;
+
+typedef enum _state {BLOCKED, WAITING, RUNNING} state;
 
 typedef struct threadControlBlock {
 	/* add important states in a thread control block */
@@ -31,6 +33,10 @@ typedef struct threadControlBlock {
 	// And more ...
 
 	// YOUR CODE HERE
+	mypthread_t threadId;
+	state status;
+	ucontext_t *context;
+	int priority;
 } tcb;
 
 /* mutex struct definition */
@@ -44,7 +50,8 @@ typedef struct mypthread_mutex_t {
 // Feel free to add your own auxiliary data structures (linked list or queue etc...)
 
 // YOUR CODE HERE
-
+tcb[10] *queue;
+int queueSize = 0;
 
 /* Function Declarations: */
 

@@ -1,7 +1,7 @@
 // File:	mypthread.c
 
-// List all group member's name:
-// username of iLab:
+// List all group member's name: Krishna Prajapati, Rakshay Kanthadai
+// username of iLab: kjp189, rsk146
 // iLab Server:
 
 #include "mypthread.h"
@@ -18,6 +18,31 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
        // allocate space of stack for this thread to run
        // after everything is all set, push this thread int
        // YOUR CODE HERE
+
+		//Malloc space for tcb. Pointer in run queue
+		queue[size] = malloc(sizeof(tcb));
+		tcb* block = queue[size];
+
+		//Initialize variables
+		block->threadId = thread;
+		block->status = WAITING;
+		block->priority = 0;
+
+		//Initialize Context variables
+		ucontext_t *cctx = malloc(sizeof(ucontext_t));
+		void* stack = malloc(STACK_SIZE);
+    	cctx->uc_link = NULL;
+    	cctx->uc_stack.ss_sp = stack;
+    	cctx->uc_stack.ss_size = STACK_SIZE;
+    	cctx->uc_stack.ss_flags = 0;
+		
+		//Initialize context function
+		if (getcontext(&cctx) < 0){
+			perror("getcontext");
+			return -1;
+		}
+		makecontext(cctx, function, 1, arg);
+		block->context = cctx;
 
     return 0;
 };

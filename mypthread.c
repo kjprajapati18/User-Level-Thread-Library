@@ -10,8 +10,10 @@
 // YOUR CODE HERE
 struct itimerval *timer = NULL;
 struct sigaction _sa;
-tcb* queue[10];
+heap* queue;
 int queueSize = 0;
+ucontext_t* schedctx;
+tcb* current;
 
 //CREATE A SCHEDULER FUNCTION. IMPLEMENT YIELD. IMPLEMENT HEAP FOR RUNQUEUE.*********************************
 
@@ -23,11 +25,12 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
        // allocate space of stack for this thread to run
        // after everything is all set, push this thread int
        // YOUR CODE HERE
-
+		if(timer == NULL){
+			queue = (heap*) malloc(sizeof(heap));
+			queue->size = 0;
+		}
 		//Malloc space for tcb. Pointer in run queue
-		queue[queueSize] = malloc(sizeof(tcb));
-		queueSize++;
-		tcb* block = queue[queueSize];
+		tcb* block = (tcb*) malloc(sizeof(tcb));
 
 		//Initialize variables
 		block->threadId = thread;
@@ -43,32 +46,42 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
     	cctx->uc_stack.ss_flags = 0;
 
 		//Initialize context function
-		if (getcontext(&cctx) < 0){
+		if (getcontext(cctx) < 0){
 			perror("getcontext");
 			return -1;
 		}
 		makecontext(cctx, function, 1, arg);
 		block->context = cctx;
+		insert(queue, block);
 
 		//timer setup
     	if(timer == NULL){
 			//First thread is being created
 			//Get main thread & set-up timer/signals
     		memset(&_sa, 0, sizeof(_sa));
-    		_sa.sa_handler = &schedule;
+    		_sa.sa_handler = &ring;
     		sigaction(SIGPROF, &_sa, NULL);
-
+			schedctx = (ucontext_t*) malloc(sizeof(ucontext_t));
+			void* stacktwo = malloc(STACK_SIZE);
+			schedctx->uc_link = NULL;
+			schedctx->uc_stack.ss_sp = stacktwo;
+			schedctx->uc_stack.ss_size = STACK_SIZE;
+			schedctx->uc_stack.ss_flags = 0;
+			if (getcontext(schedctx) < 0){
+				perror("getcontextSCHED");
+				return -1;
+			}
+			makecontext(schedctx, (void*) &schedule, 0);
 			//Initialize timer vars
+			timer = malloc(sizeof(struct itimerval));
 			timer->it_interval.tv_usec = 0;
 			timer->it_interval.tv_sec = 0;
-			timer->it_value.tv_usec = 0;
-    		timer->it_value.tv_sec = RESET_TIME;
+			timer->it_value.tv_usec = RESET_TIME;
+    		timer->it_value.tv_sec = 0;
 			
 			//CREATE TCB FOR MAIN
-			queue[queueSize] = malloc(sizeof(tcb));
-			queueSize++;
-			tcb* mblock = queue[queueSize];
-			mblock->threadId = thread;
+			tcb* mblock = (tcb*) malloc(sizeof(tcb));
+			mblock->threadId = 0;
 			mblock->status = RUNNING;
 			mblock->priority = 0;
 			ucontext_t *mcctx = malloc(sizeof(ucontext_t));
@@ -78,9 +91,10 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 			mcctx->uc_stack.ss_size = STACK_SIZE;
 			mcctx->uc_stack.ss_flags = 0;
 			mblock->context = mcctx;
+			current = mblock;
 			//Start timer, set context of main
 			setitimer(ITIMER_PROF, timer, NULL);
-			if (getcontext(&mcctx) < 0){
+			if (getcontext(mcctx) < 0){
 				perror("getcontextMAIN");
 				return -1;
 			}
@@ -95,9 +109,9 @@ int mypthread_yield() {
 	// change thread state from Running to Ready
 	// save context of this thread to its thread control block
 	// wwitch from thread context to scheduler context
-
 	// YOUR CODE HERE
-
+	stopTimer();
+	swapcontext(current->context, schedctx);
 	//Pause Timer (so we cant get interrupted while calling yield)***********************
 	//Swap context to scheduler context just before the return***************************
 	return 0;
@@ -174,18 +188,19 @@ static void schedule() {
 	// 		sched_mlfq();
 
 	// YOUR CODE HERE
-	stopTimer();
+	current->status = WAITING;
 
-
-// schedule policy
-#ifndef MLFQ
-	// Choose STCF
-	sched_stcf();
-#else
-	// Choose MLFQ
-	sched_mlfq();
-#endif
-
+	// schedule policy
+	#ifndef MLFQ
+		// Choose STCF
+		sched_stcf();
+	#else
+		// Choose MLFQ
+		sched_mlfq();
+	#endif
+	current->status = RUNNING;
+	restartTimer();
+	setcontext(current->context);
 }
 
 /* Preemptive SJF (STCF) scheduling algorithm */
@@ -194,7 +209,12 @@ static void sched_stcf() {
 	// (feel free to modify arguments and return types)
 
 	// YOUR CODE HERE
-
+	tcb* next = pop(queue);
+	current->priority++;
+	insert(queue, current);
+	//printf("thred id: %u, Prio: %d\n", next->threadId, next->priority);
+	current = next;
+	return;
 	//CALL RESTART TIMER RIGHT BEFORE A CONTEXT SWITCH***************************************
 }
 
@@ -216,14 +236,51 @@ void stopTimer()
     setitimer(ITIMER_PROF, &zeroTimer, NULL);
 }
 
-void ring(){
-	//Pause Timer************************************************************************
-	//Swap context just before return****************************************************
-
-	return 0;
-}
-
 void restartTimer()
 {
     setitimer(ITIMER_PROF, timer, NULL);
 }
+
+void ring(){
+	//Pause Timer************************************************************************
+	//Swap context just before return****************************************************
+	stopTimer();
+	swapcontext(current->context, schedctx);
+	return;
+}
+//heap functions so we don't have to edit makefile
+
+int insert(heap* queue, tcb* block){
+    queue->q[queue->size] = block;
+    queue->size++;
+    int curr = queue->size-1;
+    while(queue->q[(curr-1)/2]->priority > block->priority){
+        queue->q[curr] = queue->q[(curr-1)/2];
+        curr = (curr-1)/2;
+    }
+    queue->q[curr] = block;
+    return 0;
+}
+
+tcb* pop(heap* queue){
+    if(queue->size == 0){
+        return NULL;
+    }
+    tcb* out = queue->q[0];
+    tcb* last = queue->q[queue->size-1];
+    int curr, child;
+    for(curr = 0; curr*2+1<queue->size; curr = child){
+        child = curr*2+1;
+        if(child+1 < queue->size && queue->q[child+1]->priority < queue->q[child]->priority){
+            child++;
+        }
+        if (child < queue->size && last->priority > queue->q[child]->priority){
+            queue->q[curr] = queue->q[child];
+        }
+        else break;
+    }
+    queue->q[curr] = last;
+	queue->size--;
+    return out;
+}
+

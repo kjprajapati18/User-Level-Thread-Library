@@ -11,7 +11,7 @@
 
 /* To use Linux pthread Library in Benchmark, you have to comment the USE_MYTHREAD macro */
 #define USE_MYTHREAD 1
-#define RESET_TIME 2
+#define RESET_TIME 1000
 /* include lib header files that you need here: */
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -21,7 +21,10 @@
 #include <sys/time.h>
 #include <ucontext.h>
 #include <string.h>
+#include <signal.h>
+
 #define STACK_SIZE SIGSTKSZ
+#define SIZE 200
 
 typedef uint mypthread_t;
 
@@ -52,9 +55,15 @@ typedef struct mypthread_mutex_t {
 
 /* define your data structures here: */
 // Feel free to add your own auxiliary data structures (linked list or queue etc...)
+typedef struct _heap{
+	tcb* q[SIZE];
+	int size;
+}heap;
 
+int insert(heap* queue, tcb* block);
+
+tcb* pop(heap* queue);
 // YOUR CODE HERE
-tcb* queue[10];
 
 void stopTimer();
 
@@ -88,8 +97,14 @@ int mypthread_mutex_unlock(mypthread_mutex_t *mutex);
 
 /* destroy the mutex */
 int mypthread_mutex_destroy(mypthread_mutex_t *mutex);
+//scheduler
+static void schedule();
 
+//stcf
+static void sched_stcf();
 
+//mlfq
+static void sched_mlfq();
 
 #ifdef USE_MYTHREAD
 #define pthread_t mypthread_t

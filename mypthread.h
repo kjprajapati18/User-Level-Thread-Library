@@ -12,6 +12,7 @@
 /* To use Linux pthread Library in Benchmark, you have to comment the USE_MYTHREAD macro */
 #define USE_MYTHREAD 1
 #define STACK_SIZE SIGSTKSZ
+#define RESET_TIME 2
 /* include lib header files that you need here: */
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -53,6 +54,11 @@ typedef struct mypthread_mutex_t {
 tcb* queue[10];
 int queueSize = 0;
 
+void stopTimer();
+
+void ring();
+
+void restartTimer();
 /* Function Declarations: */
 
 /* create a new thread */

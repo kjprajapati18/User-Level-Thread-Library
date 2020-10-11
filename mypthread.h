@@ -51,12 +51,12 @@ typedef struct mypthread_mutex_t {
 // Feel free to add your own auxiliary data structures (linked list or queue etc...)
 
 // YOUR CODE HERE
-struct itimerval timer = NULL;
-struct sigaction _sa;
-tcb* queue[10];
-int queueSize = 0;
 
+void stopTimer();
 
+void ring();
+
+void restartTimer();
 /* Function Declarations: */
 
 /* create a new thread */

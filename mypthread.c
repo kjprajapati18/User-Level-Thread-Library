@@ -8,7 +8,12 @@
 
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
+struct itimerval timer = NULL;
+struct sigaction _sa;
+tcb* queue[10];
+int queueSize = 0;
 
+//CREATE A SCHEDULER FUNCTION. IMPLEMENT YIELD. IMPLEMENT HEAP FOR RUNQUEUE.*********************************
 
 /* create a new thread */
 int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
@@ -64,7 +69,7 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 			queueSize++;
 			tcb* mblock = queue[queueSize];
 			mblock->threadId = thread;
-			mblock->status = WAITING;
+			mblock->status = RUNNING;
 			mblock->priority = 0;
 			ucontext_t *mcctx = malloc(sizeof(ucontext_t));
 			void* mstack = malloc(STACK_SIZE);
@@ -92,6 +97,9 @@ int mypthread_yield() {
 	// wwitch from thread context to scheduler context
 
 	// YOUR CODE HERE
+
+	//Pause Timer (so we cant get interrupted while calling yield)***********************
+	//Swap context to scheduler context just before the return***************************
 	return 0;
 };
 
@@ -187,7 +195,7 @@ static void sched_stcf() {
 
 	// YOUR CODE HERE
 
-	//CALL RESTART TIMER RIGHT BEFORE A CONTEXT SWITCH
+	//CALL RESTART TIMER RIGHT BEFORE A CONTEXT SWITCH***************************************
 }
 
 /* Preemptive MLFQ scheduling algorithm */
@@ -206,6 +214,13 @@ void stopTimer()
     struct itimerval zeroTimer;
 	memset(&zeroTimer, 0, sizeof(struct itimerval));
     setitimer(ITIMER_PROF, &zeroTime, NULL);
+}
+
+void ring(){
+	//Pause Timer************************************************************************
+	//Swap context just before return****************************************************
+
+	return 0;
 }
 
 void restartTimer()

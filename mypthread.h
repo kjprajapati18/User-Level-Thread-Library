@@ -50,7 +50,7 @@ typedef struct mypthread_mutex_t {
 // Feel free to add your own auxiliary data structures (linked list or queue etc...)
 
 // YOUR CODE HERE
-tcb[10] *queue;
+tcb* queue[10];
 int queueSize = 0;
 
 /* Function Declarations: */
@@ -80,6 +80,8 @@ int mypthread_mutex_unlock(mypthread_mutex_t *mutex);
 
 /* destroy the mutex */
 int mypthread_mutex_destroy(mypthread_mutex_t *mutex);
+
+
 
 #ifdef USE_MYTHREAD
 #define pthread_t mypthread_t

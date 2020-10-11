@@ -8,7 +8,7 @@
 
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
-struct itimerval timer = NULL;
+struct itimerval *timer = NULL;
 struct sigaction _sa;
 tcb* queue[10];
 int queueSize = 0;
@@ -59,13 +59,13 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
     		sigaction(SIGPROF, &_sa, NULL);
 
 			//Initialize timer vars
-			timer.it_interval.tv_usec = 0;
-			timer.it_interval.tv_sec = 0;
-			timer.it_value.tv_usec = 0;
-    		timer.it_value.tv_sec = RESET_TIME;
+			timer->it_interval.tv_usec = 0;
+			timer->it_interval.tv_sec = 0;
+			timer->it_value.tv_usec = 0;
+    		timer->it_value.tv_sec = RESET_TIME;
 			
 			//CREATE TCB FOR MAIN
-			queue[queueSize] = malloc(sizeof(tcb))
+			queue[queueSize] = malloc(sizeof(tcb));
 			queueSize++;
 			tcb* mblock = queue[queueSize];
 			mblock->threadId = thread;
@@ -79,7 +79,7 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 			mcctx->uc_stack.ss_flags = 0;
 			mblock->context = mcctx;
 			//Start timer, set context of main
-			setitimer(ITIMER_PROF, &timer, NULL);
+			setitimer(ITIMER_PROF, timer, NULL);
 			if (getcontext(&mcctx) < 0){
 				perror("getcontextMAIN");
 				return -1;
@@ -213,7 +213,7 @@ void stopTimer()
 {
     struct itimerval zeroTimer;
 	memset(&zeroTimer, 0, sizeof(struct itimerval));
-    setitimer(ITIMER_PROF, &zeroTime, NULL);
+    setitimer(ITIMER_PROF, &zeroTimer, NULL);
 }
 
 void ring(){
@@ -225,5 +225,5 @@ void ring(){
 
 void restartTimer()
 {
-    setitimer(ITIMER_PROF, &timer, NULL);
+    setitimer(ITIMER_PROF, timer, NULL);
 }

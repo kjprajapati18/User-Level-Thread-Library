@@ -120,8 +120,18 @@ int mypthread_yield() {
 /* terminate a thread */
 void mypthread_exit(void *value_ptr) {
 	// Deallocated any dynamic memory created when starting this thread
-
+	
 	// YOUR CODE HERE
+	stopTimer();
+	free(current->context->uc_stack.ss_sp);
+	free(current->context);
+	free(current);
+	current = NULL;
+	if (value_ptr != NULL){
+		*((int*)value_ptr) = 0;
+	}
+	setcontext(schedctx);
+	return;
 };
 
 
@@ -188,8 +198,7 @@ static void schedule() {
 	// 		sched_mlfq();
 
 	// YOUR CODE HERE
-	current->status = WAITING;
-
+	if(current != NULL) current->status = WAITING;
 	// schedule policy
 	#ifndef MLFQ
 		// Choose STCF
@@ -210,10 +219,19 @@ static void sched_stcf() {
 
 	// YOUR CODE HERE
 	tcb* next = pop(queue);
-	current->priority++;
-	insert(queue, current);
+	//current is null and next is null we need to return to main to finish code
+	if (current == NULL && next == NULL){
+		//swap global main to local main, free global main
+		freeGlob();
+		exit(0);
+	}
+	//
+	if (current != NULL && next != NULL) {
+		current->priority++;
+		insert(queue, current);
+	}
 	//printf("thred id: %u, Prio: %d\n", next->threadId, next->priority);
-	current = next;
+	if (next != NULL) current = next;
 	return;
 	//CALL RESTART TIMER RIGHT BEFORE A CONTEXT SWITCH***************************************
 }
@@ -284,3 +302,6 @@ tcb* pop(heap* queue){
     return out;
 }
 
+void freeGlob(){
+	return;
+}

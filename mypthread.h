@@ -106,6 +106,9 @@ static void sched_stcf();
 //mlfq
 static void sched_mlfq();
 
+//free global func
+void freeGlob();
+
 #ifdef USE_MYTHREAD
 #define pthread_t mypthread_t
 #define pthread_mutex_t mypthread_mutex_t

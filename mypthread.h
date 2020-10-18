@@ -45,6 +45,7 @@ typedef struct threadControlBlock {
 	ucontext_t *context;
 	int priority;
 	mypthread_t blocker;
+	//Create a field to get blocker's return value;
 } tcb;
 
 /* mutex struct definition */
@@ -65,6 +66,8 @@ int insert(heap* queue, tcb* block);
 
 tcb* pop(heap* queue);
 
+int findThread(mypthread_t threadId);
+
 typedef struct _node{
 	tcb* thread;
 	struct _node* next;
@@ -80,6 +83,10 @@ void stopTimer();
 void ring();
 
 void restartTimer();
+
+void resumeTimer();
+void printLL();
+void printHeap();
 /* Function Declarations: */
 
 /* create a new thread */

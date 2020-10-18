@@ -33,6 +33,21 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 			queue = (heap*) malloc(sizeof(heap));
 			queue->size = 0;
 			count = 1;
+			
+			//Set up mypthread_exit context
+			ex = (ucontext_t*) malloc(sizeof(ucontext_t));
+			void* stackthree = malloc(STACK_SIZE);
+			ex->uc_link = NULL;
+			ex->uc_stack.ss_sp = stackthree;
+			ex->uc_stack.ss_size = STACK_SIZE;
+			ex->uc_stack.ss_flags = 0;
+			if(getcontext(ex) < 0){
+				perror("getcontextEXIT");
+				return -1;
+			}
+		} else {
+			//Prevent thread switch
+			stopTimer();
 		}
 		//Malloc space for tcb. Pointer in run queue
 		tcb* block = (tcb*) malloc(sizeof(tcb));
@@ -74,20 +89,12 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 			schedctx->uc_stack.ss_sp = stacktwo;
 			schedctx->uc_stack.ss_size = STACK_SIZE;
 			schedctx->uc_stack.ss_flags = 0;
-			ex = (ucontext_t*) malloc(sizeof(ucontext_t));
-			void* stackthree = malloc(STACK_SIZE);
-			ex->uc_link = NULL;
-			ex->uc_stack.ss_sp = stackthree;
-			ex->uc_stack.ss_size = STACK_SIZE;
-			ex->uc_stack.ss_flags = 0;
+			
 			if (getcontext(schedctx) < 0){
 				perror("getcontextSCHED");
 				return -1;
 			}
-			if(getcontext(ex) < 0){
-				perror("getcontextEXIT");
-				return -1;
-			}
+			
 			makecontext(schedctx, (void*) &schedule, 0);
 			makecontext(ex, (void*) &mypthread_exit, 0);
 			//Initialize timer vars
@@ -99,7 +106,7 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 			
 			//CREATE TCB FOR MAIN
 			tcb* mblock = (tcb*) malloc(sizeof(tcb));
-			mblock->threadId = 0;
+			mblock->threadId = NULL;
 			mblock->status = RUNNING;
 			mblock->priority = 0;
 			ucontext_t *mcctx = malloc(sizeof(ucontext_t));
@@ -120,6 +127,9 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 				perror("getcontextMAIN");
 				return -1;
 			}
+		} else {
+			//Resume timer since we stopped it to prevent thread switches
+			resumeTimer();
 		}
 
     return 0;
@@ -147,12 +157,15 @@ void mypthread_exit(void *value_ptr) {
 	
 	// YOUR CODE HERE
 	stopTimer();
+	//In pushBack, set all blocked threads to contain this value_ptr;
 	pushBack(blockList, queue, current);
+	printf("Succesful pushback\n");
 	free(current->context->uc_stack.ss_sp);
 	free(current->context);
 	free(current);
 	current = NULL;
 	//does ucontext store a return value
+	//Set all blockers
 	if (value_ptr != NULL){
 		*((int*)value_ptr) = 0;
 	}
@@ -168,12 +181,25 @@ int mypthread_join(mypthread_t thread, void **value_ptr) {
 	// de-allocate any dynamic memory created by the joining thread
 
 	// YOUR CODE HERE
-	current->blocker = thread;
-	current->status = BLOCKED;
-	nodeInsert(blockList, current);
-	tcb* temp = current;
-	current = NULL;
-	swapcontext(temp->context, schedctx);
+	stopTimer();
+	int threadExists = findThread(thread);
+	if(threadExists){
+		current->blocker = thread;
+		current->status = BLOCKED;
+		nodeInsert(blockList, current);
+		tcb* temp = current;
+		mypthread_t* id = current->threadId;
+		if(id == NULL) printf("Main calls schedule\n");
+		else printf("%d calls schedule\n", *id);
+		current = NULL;
+		swapcontext(temp->context, schedctx);
+		//When we switch back, the blocker thread has finished execution
+		//PthreadExit should have set a value in this thread's tcb
+		//set value_ptr equal to that return value. (watch out for malloc/out-of-scope issues)
+	} else{
+		printf("Didnt find thread_id %d\n", thread);
+		resumeTimer();
+	}
 	return 0;
 };
 
@@ -230,7 +256,12 @@ static void schedule() {
 	// 		sched_mlfq();
 
 	// YOUR CODE HERE
-	if(current != NULL) current->status = WAITING;
+
+	if(current != NULL){ 
+		current->status = WAITING;
+	}
+	printLL();
+	printHeap();
 	// schedule policy
 	#ifndef MLFQ
 		// Choose STCF
@@ -239,6 +270,7 @@ static void schedule() {
 		// Choose MLFQ
 		sched_mlfq();
 	#endif
+	if(current == NULL) setcontext(schedctx);
 	current->status = RUNNING;
 	restartTimer();
 	setcontext(current->context);
@@ -251,21 +283,30 @@ static void sched_stcf() {
 
 	// YOUR CODE HERE
 	tcb* next = pop(queue);
+
 	//current is null and next is null we need to return to main to finish code
-	if (current == NULL && next == NULL){
-		//swap global main to local main, free global main
+	if (current == NULL && next == NULL && *blockList == NULL){
+		//No threads running, waiting, or blocked
+		//Technically we dont need to check blocklist, but for debugging purposes we'll leave it for now
+		//Our fault if program doesnt terminate because join() must occur on a valid thread, and needs to get unblocked eventually (so the case where nothing in queues but stuff in block list
+		// is cuz of shitty library code that didnt unlblock)
 		freeGlob();
 		exit(0);
 	}
-	//
+
+	//If we have a valid current, and we have a valid next, then current got timer interrupted
+	//Increase quantum and put current back into queue
+	//If we dont have a valid current, we cant increase quantum or put back
+	//If we dont have valid next, no reason to increase quantum, and we gotta pull current back out anyways
 	if (current != NULL && next != NULL) {
 		current->priority++;
 		insert(queue, current);
 	}
+
 	//printf("thred id: %u, Prio: %d\n", next->threadId, next->priority);
+	//If next is NULL, keep current as is (nothing else can run). Otherwise switch to next.
 	if (next != NULL) current = next;
 	return;
-	//CALL RESTART TIMER RIGHT BEFORE A CONTEXT SWITCH***************************************
 }
 
 /* Preemptive MLFQ scheduling algorithm */
@@ -283,17 +324,26 @@ void stopTimer()
 {
     struct itimerval zeroTimer;
 	memset(&zeroTimer, 0, sizeof(struct itimerval));
-    setitimer(ITIMER_PROF, &zeroTimer, NULL);
+    setitimer(ITIMER_PROF, &zeroTimer, timer);
 }
 
 void restartTimer()
 {
+	timer->it_interval.tv_usec = 0;
+	timer->it_interval.tv_sec = 0;
+	timer->it_value.tv_usec = RESET_TIME;
+    timer->it_value.tv_sec = 0;
     setitimer(ITIMER_PROF, timer, NULL);
+}
+
+void resumeTimer(){
+	setitimer(ITIMER_PROF, timer, NULL);
 }
 
 void ring(){
 	//Pause Timer************************************************************************
 	//Swap context just before return****************************************************
+	printf("brrriing brring\n");
 	stopTimer();
 	swapcontext(current->context, schedctx);
 	return;
@@ -304,9 +354,11 @@ int insert(heap* queue, tcb* block){
     queue->q[queue->size] = block;
     queue->size++;
     int curr = queue->size-1;
-    while(queue->q[(curr-1)/2]->priority > block->priority){
-        queue->q[curr] = queue->q[(curr-1)/2];
-        curr = (curr-1)/2;
+	int parent = (curr-1)/2;
+    while(queue->q[parent]->priority > block->priority && parent != curr){
+        queue->q[curr] = queue->q[parent];
+		curr = parent;
+        parent = (curr-1)/2;
     }
     queue->q[curr] = block;
     return 0;
@@ -333,12 +385,33 @@ tcb* pop(heap* queue){
 	queue->size--;
     return out;
 }
+
+int findThread(mypthread_t threadId){
+	int i;
+	for(i = 0; i < queue->size; i++){
+		mypthread_t* id = (queue->q[i])->threadId;
+		if(id == NULL) continue;
+		if(*id == threadId) return 1;
+	}
+	//Search through the block queue
+	node* ptr = *blockList;
+	while(ptr != NULL){
+		mypthread_t* id2 = ptr->thread->threadId;
+		if (id2==NULL) printf("searching main\n");
+		else printf("searching %d", *id2);
+		if(id2 != NULL && *id2 == threadId) return 1;
+		ptr = ptr->next;
+	}
+	return 0;
+}
+
 //free blocklist, contexts, globs
 //call when main exits
 void freeGlob(){
 	return;
 }
 
+//head is global, pls dleete
 int nodeInsert(node** head, tcb* t){
 	node* newNode = (node*) malloc(sizeof(node));
 	newNode->thread = t;
@@ -347,14 +420,18 @@ int nodeInsert(node** head, tcb* t){
 	return 0;
 }
 
+//head is global, queue is global, pls dfix
 int pushBack(node** head, heap* queue, tcb* t){
 	if (*head == NULL){
 		return -1;
 	}
 	node* ptr = (*head)->next;
 	node* prev = *head;
+	mypthread_t threadExitId = *(t->threadId);
+
 	while(ptr != NULL){
-		if(ptr->thread->blocker == t->threadId){
+		//printf("Looking thorugh pushback\n");
+		if(ptr->thread->blocker == threadExitId){
 			ptr->thread->status = WAITING;
 			prev->next = ptr->next;
 			insert(queue, ptr->thread);
@@ -367,11 +444,41 @@ int pushBack(node** head, heap* queue, tcb* t){
 	}
 	//checking head last
 	ptr = *head;	
-	if(ptr->thread->blocker == t->threadId){
+	if(ptr->thread->blocker == threadExitId){
+		//printf("Found head in pushback. Queue size = %d.\n", queue->size);
 		ptr->thread->status = WAITING;
 		insert(queue, ptr->thread);
 		*head = ptr->next;
 		free(ptr);
 	}
 	return 0;
+}
+
+void printLL(){
+	node* ptr = *blockList;
+	printf("Block List: ");
+	if(ptr == NULL) printf("NULL\n");
+	else{
+		while(ptr != NULL){
+			mypthread_t *id = (ptr->thread->threadId);
+			if(id == NULL) printf("MAIN -> ");
+			else printf("%d -> ", *id);
+			ptr = ptr->next;
+		}
+		printf("\n");
+	}
+	return;
+}
+
+void printHeap(){
+	int i;
+	printf("Run Queue: ");
+	for(i = 0; i < queue->size; i++){
+		mypthread_t* id = (queue->q[i])->threadId;
+		if(id == NULL) printf("MAIN -> ");
+		else printf("%d -> ", *id);
+	}
+	printf("END\n");
+	//Search through the block queue
+	return;
 }

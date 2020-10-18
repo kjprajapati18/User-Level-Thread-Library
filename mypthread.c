@@ -209,6 +209,14 @@ int mypthread_mutex_init(mypthread_mutex_t *mutex,
 	//initialize data structures for this mutex
 
 	// YOUR CODE HERE
+	if(mutex != NULL && mutex->init == 2){
+		return -1;
+	}
+	int* lock = malloc(sizeof(int));
+	*lock = 0;
+	mutex->init = 2; 
+	mutex->thread_id = current->threadId;
+	mutex->lock_status = lock;
 	return 0;
 };
 
@@ -220,6 +228,16 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
         // context switch to the scheduler thread
 
         // YOUR CODE HERE
+		int started = 0;
+		while(TestAndSet(mutex->lock_status, 1)){
+			
+			stopTimer();
+			current->status = BLOCKED;
+			swapcontext(current->context, schedctx);
+		}
+		//check if test and set sets it to 1;
+		//printf("lock: %d", *(mutex->lock_status));
+		current->status = RUNNING;
         return 0;
 };
 
@@ -230,6 +248,8 @@ int mypthread_mutex_unlock(mypthread_mutex_t *mutex) {
 	// so that they could compete for mutex later.
 
 	// YOUR CODE HERE
+	*(mutex->lock_status) = 1;
+	
 	return 0;
 };
 
@@ -238,6 +258,8 @@ int mypthread_mutex_unlock(mypthread_mutex_t *mutex) {
 int mypthread_mutex_destroy(mypthread_mutex_t *mutex) {
 	// Deallocate dynamic memory created in mypthread_mutex_init
 
+	mutex->init = 0; 
+	free(mutex->lock_status);
 	return 0;
 };
 

@@ -44,6 +44,7 @@ typedef struct threadControlBlock {
 	state status;
 	ucontext_t *context;
 	int priority;
+	mypthread_t blocker;
 } tcb;
 
 /* mutex struct definition */
@@ -63,6 +64,15 @@ typedef struct _heap{
 int insert(heap* queue, tcb* block);
 
 tcb* pop(heap* queue);
+
+typedef struct _node{
+	tcb* thread;
+	struct _node* next;
+}node;
+
+int nodeInsert(node** head, tcb* t);
+
+int pushBack(node** head, heap* queue, tcb* t);
 // YOUR CODE HERE
 
 void stopTimer();

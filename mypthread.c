@@ -11,9 +11,13 @@
 struct itimerval *timer = NULL;
 struct sigaction _sa;
 heap* queue;
-int queueSize = 0;
+//assign to 0
 ucontext_t* schedctx;
+ucontext_t* ex;
+node** blockList;
 tcb* current;
+//asign to 0
+uint count;
 
 //CREATE A SCHEDULER FUNCTION. IMPLEMENT YIELD. IMPLEMENT HEAP FOR RUNQUEUE.*********************************
 
@@ -28,11 +32,14 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 		if(timer == NULL){
 			queue = (heap*) malloc(sizeof(heap));
 			queue->size = 0;
+			count = 1;
 		}
 		//Malloc space for tcb. Pointer in run queue
 		tcb* block = (tcb*) malloc(sizeof(tcb));
 
 		//Initialize variables
+		*thread = count;
+		count++;
 		block->threadId = thread;
 		block->status = WAITING;
 		block->priority = 0;
@@ -40,7 +47,7 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 		//Initialize Context variables
 		ucontext_t *cctx = malloc(sizeof(ucontext_t));
 		void* stack = malloc(STACK_SIZE);
-    	cctx->uc_link = NULL;
+    	cctx->uc_link = ex;
     	cctx->uc_stack.ss_sp = stack;
     	cctx->uc_stack.ss_size = STACK_SIZE;
     	cctx->uc_stack.ss_flags = 0;
@@ -67,11 +74,22 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 			schedctx->uc_stack.ss_sp = stacktwo;
 			schedctx->uc_stack.ss_size = STACK_SIZE;
 			schedctx->uc_stack.ss_flags = 0;
+			ex = (ucontext_t*) malloc(sizeof(ucontext_t));
+			void* stackthree = malloc(STACK_SIZE);
+			ex->uc_link = NULL;
+			ex->uc_stack.ss_sp = stackthree;
+			ex->uc_stack.ss_size = STACK_SIZE;
+			ex->uc_stack.ss_flags = 0;
 			if (getcontext(schedctx) < 0){
 				perror("getcontextSCHED");
 				return -1;
 			}
+			if(getcontext(ex) < 0){
+				perror("getcontextEXIT");
+				return -1;
+			}
 			makecontext(schedctx, (void*) &schedule, 0);
+			makecontext(ex, (void*) &mypthread_exit, 0);
 			//Initialize timer vars
 			timer = malloc(sizeof(struct itimerval));
 			timer->it_interval.tv_usec = 0;
@@ -86,12 +104,16 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 			mblock->priority = 0;
 			ucontext_t *mcctx = malloc(sizeof(ucontext_t));
 			void* mstack = malloc(STACK_SIZE);
-			mcctx->uc_link = NULL;
+			mcctx->uc_link = NULL; //set to freeglob context
 			mcctx->uc_stack.ss_sp = mstack;
 			mcctx->uc_stack.ss_size = STACK_SIZE;
 			mcctx->uc_stack.ss_flags = 0;
 			mblock->context = mcctx;
 			current = mblock;
+			//create block queue
+			node** head = malloc(sizeof(node*));
+			blockList = head;
+			*blockList = NULL;
 			//Start timer, set context of main
 			setitimer(ITIMER_PROF, timer, NULL);
 			if (getcontext(mcctx) < 0){
@@ -117,16 +139,20 @@ int mypthread_yield() {
 	return 0;
 };
 
+
+//consider main exits
 /* terminate a thread */
 void mypthread_exit(void *value_ptr) {
 	// Deallocated any dynamic memory created when starting this thread
 	
 	// YOUR CODE HERE
 	stopTimer();
+	pushBack(blockList, queue, current);
 	free(current->context->uc_stack.ss_sp);
 	free(current->context);
 	free(current);
 	current = NULL;
+	//does ucontext store a return value
 	if (value_ptr != NULL){
 		*((int*)value_ptr) = 0;
 	}
@@ -142,6 +168,12 @@ int mypthread_join(mypthread_t thread, void **value_ptr) {
 	// de-allocate any dynamic memory created by the joining thread
 
 	// YOUR CODE HERE
+	current->blocker = thread;
+	current->status = BLOCKED;
+	nodeInsert(blockList, current);
+	tcb* temp = current;
+	current = NULL;
+	swapcontext(temp->context, schedctx);
 	return 0;
 };
 
@@ -301,7 +333,45 @@ tcb* pop(heap* queue){
 	queue->size--;
     return out;
 }
-
+//free blocklist, contexts, globs
+//call when main exits
 void freeGlob(){
 	return;
+}
+
+int nodeInsert(node** head, tcb* t){
+	node* newNode = (node*) malloc(sizeof(node));
+	newNode->thread = t;
+	newNode->next = *head;
+	*head = newNode;
+	return 0;
+}
+
+int pushBack(node** head, heap* queue, tcb* t){
+	if (*head == NULL){
+		return -1;
+	}
+	node* ptr = (*head)->next;
+	node* prev = *head;
+	while(ptr != NULL){
+		if(ptr->thread->blocker == t->threadId){
+			ptr->thread->status = WAITING;
+			prev->next = ptr->next;
+			insert(queue, ptr->thread);
+			free(ptr);
+		}
+		else{
+			prev = ptr;
+		}
+		ptr = ptr->next;
+	}
+	//checking head last
+	ptr = *head;	
+	if(ptr->thread->blocker == t->threadId){
+		ptr->thread->status = WAITING;
+		insert(queue, ptr->thread);
+		*head = ptr->next;
+		free(ptr);
+	}
+	return 0;
 }

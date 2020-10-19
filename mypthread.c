@@ -215,7 +215,7 @@ int mypthread_mutex_init(mypthread_mutex_t *mutex,
 	int* lock = malloc(sizeof(int));
 	*lock = 0;
 	mutex->init = 2; 
-	mutex->thread_id = current->threadId;
+	mutex->thread_id = *(current->threadId);
 	mutex->lock_status = lock;
 	return 0;
 };
@@ -229,7 +229,7 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
 
         // YOUR CODE HERE
 		int started = 0;
-		while(TestAndSet(mutex->lock_status, 1)){
+		while(__sync_lock_test_and_set(mutex->lock_status, 1)){
 			
 			stopTimer();
 			current->status = BLOCKED;

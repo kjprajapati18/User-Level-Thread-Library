@@ -228,7 +228,6 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
         // context switch to the scheduler thread
 
         // YOUR CODE HERE
-		int started = 0;
 		while(__sync_lock_test_and_set(mutex->lock_status, 1)){
 			
 			stopTimer();

@@ -21,7 +21,7 @@ struct thing{
 int* p;
 mypthread_t *thread, *thread2, *thread0, *thread4;
 mypthread_mutex_t *m;
-int max = 4;
+int max = 100000;
 
 int killSomeTime(int a){
 	a = a*a*a;
@@ -55,9 +55,9 @@ void* beef(){
 	*p = 7;
 	mypthread_mutex_unlock(m);//
 	struct thing* c;
-	mypthread_join(*thread, &c);
-	printf("Beef sees foo is finished. Beef received the value %d%d%d%d, Beef starts\n", (*c).a, (*c).b,(*c).c, (*c).d);
-	free(c);
+	// mypthread_join(*thread, &c);
+	// printf("Beef sees foo is finished. Beef received the value %d%d%d%d, Beef starts\n", (*c).a, (*c).b,(*c).c, (*c).d);
+	// free(c);
 	int x = 0;
 	while(x<max){
 		printf("%d. beef %d\n", x, killSomeTime(x));
@@ -76,10 +76,10 @@ void* miggy(){
 	*p = 8;
 	mypthread_mutex_unlock(m);
 	int* a;
-	mypthread_join(*thread2, &a);
-	if(a == NULL) printf("NULL MIG\n");
-	printf("Miggy sees beef is finished %d. Miggy starts \n", *a);
-	free(a);
+	// mypthread_join(*thread2, &a);
+	// if(a == NULL) printf("NULL MIG\n");
+	// printf("Miggy sees beef is finished %d. Miggy starts \n", *a);
+	// free(a);
 	int x =0;
 	while(x < max){
 		printf("%d. miggy\n", x);
@@ -88,6 +88,7 @@ void* miggy(){
 }
 void* geet(){
 	int x = 0;
+	printf("getetet\n");
 	mypthread_mutex_lock(m);
 	*p = *p + 1;
 	mypthread_mutex_unlock(m);
@@ -96,7 +97,7 @@ void* geet(){
 	// printf("Geet sees foo finished. Geet waits for beef\n");
 	// mypthread_join(*thread2, NULL);
 	// printf("Geet sees beef finished. Geet waits for miggy\n");
-	mypthread_join(*thread0, NULL);
+	// mypthread_join(*thread0, NULL);
 	printf("Geet sees miggy finished. Geetsauce\n");
 	while(x < max){
 		printf("geet\n");
@@ -140,6 +141,9 @@ int main(int argc, char **argv) {
 	mypthread_yield();
 	mypthread_yield();
 	mypthread_mutex_unlock(m);
+	mypthread_join(*thread0, NULL);
+	mypthread_join(*thread, NULL);
+	mypthread_join(*thread2, NULL);
 	mypthread_join(*thread4, NULL);
 
 	printf("main sees geet finished. main starts\n");

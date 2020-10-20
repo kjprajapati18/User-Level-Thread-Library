@@ -18,7 +18,7 @@
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
 struct itimerval *timer = NULL;
-struct sigaction _sa;
+struct sigaction *_sa;
 heap* queue;
 //assign to 0
 ucontext_t* schedctx;
@@ -59,10 +59,10 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 				perror("getcontextEXIT");
 				return -1;
 			}
-		} else {
+		} /*else {
 			//Prevent thread switch
 			stopTimer();
-		}
+		}*/
 		//Malloc space for tcb. Pointer in run queue
 		tcb* block = (tcb*) malloc(sizeof(tcb));
 
@@ -97,9 +97,10 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
     	if(timer == NULL){
 			//First thread is being created
 			//Get main thread & set-up timer/signals
-    		memset(&_sa, 0, sizeof(_sa));
-    		_sa.sa_handler = &ring;
-    		sigaction(SIGPROF, &_sa, NULL);
+			_sa = malloc(sizeof(struct itimerval));
+    		memset(_sa, 0, sizeof(struct itimerval));
+    		_sa->sa_handler = &ring;
+    		sigaction(SIGPROF, _sa, NULL);
 			schedctx = (ucontext_t*) malloc(sizeof(ucontext_t));
 			void* stacktwo = malloc(STACK_SIZE);
 			schedctx->uc_link = NULL;
@@ -117,7 +118,7 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 
 			//Initialize timer vars
 			timer = malloc(sizeof(struct itimerval));
-			timer->it_interval.tv_usec = 0;
+			timer->it_interval.tv_usec = RESET_TIME2;
 			timer->it_interval.tv_sec = 0;
 			timer->it_value.tv_usec = RESET_TIME2;
     		timer->it_value.tv_sec = 0;
@@ -148,11 +149,11 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 				perror("getcontextMAIN");
 				return -1;
 			}
-		} else {
+		} /*else {
 			//Resume timer since we stopped it to prevent thread switches
 			//resumeTimer();
 			restartTimer();
-		}
+		}*/
 
     return 0;
 };
@@ -164,7 +165,8 @@ int mypthread_yield() {
 	// save context of this thread to its thread control block
 	// wwitch from thread context to scheduler context
 	// YOUR CODE HERE
-	stopTimer();
+	// stopTimer();
+	signal(SIGPROF, SIG_IGN);
 	swapcontext(current->context, schedctx);
 	//Pause Timer (so we cant get interrupted while calling yield)***********************
 	//Swap context to scheduler context just before the return***************************
@@ -178,7 +180,8 @@ void mypthread_exit(void *value_ptr) {
 	// Deallocated any dynamic memory created when starting this thread
 	
 	// YOUR CODE HERE
-	stopTimer();
+	//stopTimer();
+	signal(SIGPROF, SIG_IGN);
 	//In pushBack, set all blocked threads to contain this value_ptr;
 	pushBackThread(blockList, queue, current, value_ptr);
 	#ifdef debug 
@@ -201,8 +204,10 @@ int mypthread_join(mypthread_t thread, void **value_ptr) {
 	// de-allocate any dynamic memory created by the joining thread
 
 	// YOUR CODE HERE
-	stopTimer();
+	// stopTimer();
+	signal(SIGPROF, SIG_IGN);
 	int threadExists = findThread(thread);
+
 	if(threadExists){
 		current->blocker = thread;
 		current->status = BLOCKED;
@@ -223,8 +228,9 @@ int mypthread_join(mypthread_t thread, void **value_ptr) {
 		#ifdef debug
 			printf("Didnt find thread_id %d\n", thread);
 		#endif
+		sigaction(SIGPROF, _sa, NULL);
 		//resumeTimer();
-		restartTimer();
+		// restartTimer();
 	}
 	return 0;
 };
@@ -253,7 +259,8 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
         // context switch to the scheduler thread
 
         // YOUR CODE HERE
-		stopTimer();
+		// stopTimer();
+		signal(SIGPROF, SIG_IGN);
 		while(__sync_lock_test_and_set(mutex->lock_status, 1)){
 			
 			current->status = BLOCKED;
@@ -265,7 +272,8 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
 			swapcontext(temp->context, schedctx);
 		}
 		//resumeTimer();
-		restartTimer();
+		// restartTimer();
+		sigaction(SIGPROF, _sa, NULL);
 		//check if test and set sets it to 1;
 		//printf("lock: %d", *(mutex->lock_status));
         return 0;
@@ -278,11 +286,17 @@ int mypthread_mutex_unlock(mypthread_mutex_t *mutex) {
 	// so that they could compete for mutex later.
 
 	// YOUR CODE HERE
-	stopTimer();
+
+	//Don't stop or restart the timer because the block list has HEAD Insert. The node that we get interrupted on will still exist in block queue, as well as everything after
+	//Worst case is that not every thread gets to fairly compete for Mutex if we get interrupted, but everything afterward will get unblocked as if it wasnt interrupted
+	//		If the mutex gets locked before we context switch back, we'll just end up putting a thread back in to run queue that should stay in block list
+	//		However, it is stuck in the while loop in lock, and therefore will come back here eventually. In fact, it will have a better chance at competing for the next iteration
+	//		Which is fair.
+	// stopTimer();
 	*(mutex->lock_status) = 0;
 	pushBackMutex(blockList, queue, mutex);
 	//resumeTimer();
-	restartTimer();
+	// restartTimer();
 	return 0;
 };
 
@@ -327,9 +341,10 @@ static void schedule() {
 		// Choose MLFQ
 		sched_mlfq();
 	#endif
-	if(current == NULL) setcontext(schedctx);
+	if(current == NULL) setcontext(schedctx); //Equivalent to idle wait to let programmer know that he's deadlocked
 	current->status = RUNNING;
-	restartTimer();
+	//restartTimer();
+	sigaction(SIGPROF, _sa, NULL);
 	setcontext(current->context);
 }
 
@@ -340,29 +355,27 @@ static void sched_stcf() {
 
 	// YOUR CODE HERE
 	tcb* next = pop(queue);
-
 	//current is null and next is null we need to return to main to finish code
-	if (current == NULL && next == NULL && *blockList == NULL){
+	//We actually don't need this since main should always join all threads
+	if (current == NULL && next == NULL){
 		//No threads running, waiting, or blocked
-		//Technically we dont need to check blocklist, but for debugging purposes we'll leave it for now
+		//Technically we dont need to check blocklist, but for debugging purposes we'll leave it for now. DONE WITH DEBUGGING
 		//Our fault if program doesnt terminate because join() must occur on a valid thread, and needs to get unblocked eventually (so the case where nothing in queues but stuff in block list
 		// is cuz of shitty library code that didnt unlblock)
 		freeGlob();
 		exit(0);
 	}
 
-	//If we have a valid current, and we have a valid next, then current got timer interrupted
-	//Increase quantum and put current back into queue
-	//If we dont have a valid current, we cant increase quantum or put back
-	//If we dont have valid next, no reason to increase quantum, and we gotta pull current back out anyways
-	if (current != NULL && next != NULL) {
+	//Since current has run, even if its the only thing that can run, we should increase the quantum
+	if (current != NULL){
 		current->priority++;
-		insert(queue, current);
 	}
-
 	//printf("thred id: %u, Prio: %d\n", next->threadId, next->priority);
 	//If next is NULL, keep current as is (nothing else can run). Otherwise switch to next.
-	if (next != NULL) current = next;
+	if (next != NULL){
+		insert(queue, current);
+		current = next;
+	}
 	return;
 }
 
@@ -377,6 +390,7 @@ static void sched_mlfq() {
 // Feel free to add any other functions you need
 
 // YOUR CODE HERE
+/*
 void stopTimer()
 {
     struct itimerval zeroTimer;
@@ -395,7 +409,7 @@ void restartTimer()
 
 void resumeTimer(){
 	setitimer(ITIMER_PROF, timer, NULL);
-}
+}*/
 
 void ring(){
 	//Pause Timer************************************************************************
@@ -403,13 +417,16 @@ void ring(){
 	#ifdef debug
 		printf("brrriing brring\n");
 	#endif
-	stopTimer();
+	//stopTimer();
+	signal(SIGPROF, SIG_IGN);
 	swapcontext(current->context, schedctx);
 	return;
 }
+
 //heap functions so we don't have to edit makefile
 
 int insert(heap* queue, tcb* block){
+	if(block == NULL) return -1;
     queue->q[queue->size] = block;
     queue->size++;
     int curr = queue->size-1;
@@ -469,6 +486,7 @@ int findThread(mypthread_t threadId){
 //free blocklist, contexts, globs
 //call when main exits
 void freeGlob(){
+	signal(SIGPROF, SIG_IGN);
 	if(current != NULL){
 		free(current->context->uc_stack.ss_sp);
 		free(current->context);
@@ -479,6 +497,7 @@ void freeGlob(){
 		printf("In free glob");
 	#endif
 	free(timer);
+	free(_sa);
 	free(queue);
 	free(schedctx->uc_stack.ss_sp);
 	free(schedctx);

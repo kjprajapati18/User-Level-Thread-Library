@@ -83,13 +83,13 @@ int pushBackThread(node** head, heap* queue, tcb* t, void* returnPtr);
 int pushBackMutex(node** head, heap* queue, mypthread_mutex_t* m);
 // YOUR CODE HERE
 
-void stopTimer();
+//void stopTimer();
 
 void ring();
 
-void restartTimer();
+//void restartTimer();
 
-void resumeTimer();
+//void resumeTimer();
 void printLL();
 void printHeap();
 /* Function Declarations: */

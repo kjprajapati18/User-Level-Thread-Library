@@ -2,9 +2,17 @@
 
 // List all group member's name: Krishna Prajapati, Rakshay Kanthadai
 // username of iLab: kjp189, rsk146
-// iLab Server:
+// iLab Server: ilab3
 
 #include "mypthread.h"
+
+//STUFF LEFT TO DO::
+//	-Maybe make timer not be global. See if local timers help fix problem (i dont see why it would)
+//	-Delete all unnecssary comments such as this one
+//	-Finish writing report
+//	-One last test with all functions
+//	-Submit everything needed
+
 
 //#define debug 1
 // INITAILIZE ALL YOUR VARIABLES HERE

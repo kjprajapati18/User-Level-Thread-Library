@@ -23,6 +23,14 @@ mypthread_t *thread, *thread2, *thread0, *thread4;
 mypthread_mutex_t *m;
 int max = 4;
 
+int killSomeTime(int a){
+	a = a*a*a;
+	int b = a -6541563;
+	int c = b/3;
+	int d = c++ *2;
+	return d%7135;
+}
+
 void* foo(){
 	struct thing* x = malloc(sizeof(struct thing));
 	x->a = 1;
@@ -34,7 +42,8 @@ void* foo(){
 	*p = 6;
 	mypthread_mutex_unlock(m);
 	while(b < max){
-		printf("%d. foo\n", b);
+		printf("%d. foo %d\n", b, killSomeTime(b));
+		
 		b++;
 	}
 	
@@ -51,7 +60,7 @@ void* beef(){
 	free(c);
 	int x = 0;
 	while(x<max){
-		printf("%d. beef\n", x);
+		printf("%d. beef %d\n", x, killSomeTime(x));
 		x++;
 	}
 	int* d = malloc(sizeof(int));
@@ -69,7 +78,7 @@ void* miggy(){
 	int* a;
 	mypthread_join(*thread2, &a);
 	if(a == NULL) printf("NULL MIG\n");
-	printf("Miggy sees beef is finished %d. Miggy starts\n", *a);
+	printf("Miggy sees beef is finished %d. Miggy starts \n", *a);
 	free(a);
 	int x =0;
 	while(x < max){

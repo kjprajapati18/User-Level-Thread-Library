@@ -6,7 +6,7 @@
 
 #include "mypthread.h"
 
-#define debug 1
+//#define debug 1
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
 struct itimerval *timer = NULL;
@@ -19,6 +19,8 @@ node** blockList;
 tcb* current;
 //asign to 0
 uint count;
+
+int RESET_TIME2 = 8000;
 
 //CREATE A SCHEDULER FUNCTION. IMPLEMENT YIELD. IMPLEMENT HEAP FOR RUNQUEUE.*********************************
 
@@ -109,7 +111,7 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 			timer = malloc(sizeof(struct itimerval));
 			timer->it_interval.tv_usec = 0;
 			timer->it_interval.tv_sec = 0;
-			timer->it_value.tv_usec = RESET_TIME;
+			timer->it_value.tv_usec = RESET_TIME2;
     		timer->it_value.tv_sec = 0;
 			
 			//CREATE TCB FOR MAIN
@@ -140,7 +142,8 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 			}
 		} else {
 			//Resume timer since we stopped it to prevent thread switches
-			resumeTimer();
+			//resumeTimer();
+			restartTimer();
 		}
 
     return 0;
@@ -212,7 +215,8 @@ int mypthread_join(mypthread_t thread, void **value_ptr) {
 		#ifdef debug
 			printf("Didnt find thread_id %d\n", thread);
 		#endif
-		resumeTimer();
+		//resumeTimer();
+		restartTimer();
 	}
 	return 0;
 };
@@ -252,7 +256,8 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
 			current = NULL;
 			swapcontext(temp->context, schedctx);
 		}
-		resumeTimer();
+		//resumeTimer();
+		restartTimer();
 		//check if test and set sets it to 1;
 		//printf("lock: %d", *(mutex->lock_status));
         return 0;
@@ -268,7 +273,8 @@ int mypthread_mutex_unlock(mypthread_mutex_t *mutex) {
 	stopTimer();
 	*(mutex->lock_status) = 0;
 	pushBackMutex(blockList, queue, mutex);
-	resumeTimer();
+	//resumeTimer();
+	restartTimer();
 	return 0;
 };
 
@@ -374,7 +380,7 @@ void restartTimer()
 {
 	timer->it_interval.tv_usec = 0;
 	timer->it_interval.tv_sec = 0;
-	timer->it_value.tv_usec = RESET_TIME;
+	timer->it_value.tv_usec = RESET_TIME2;
     timer->it_value.tv_sec = 0;
     setitimer(ITIMER_PROF, timer, NULL);
 }
@@ -461,7 +467,9 @@ void freeGlob(){
 		// if(current->returnValue != NULL) free(current->returnValue);
 		free(current);
 	}
-	printf("In free glob");
+	#ifdef debug
+		printf("In free glob");
+	#endif
 	free(timer);
 	free(queue);
 	free(schedctx->uc_stack.ss_sp);

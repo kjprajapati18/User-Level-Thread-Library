@@ -11,7 +11,6 @@
 
 /* To use Linux pthread Library in Benchmark, you have to comment the USE_MYTHREAD macro */
 #define USE_MYTHREAD 1
-#define RESET_TIME 10000
 /* include lib header files that you need here: */
 #include <unistd.h>
 #include <sys/syscall.h>

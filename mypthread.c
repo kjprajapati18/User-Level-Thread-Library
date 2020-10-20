@@ -6,7 +6,7 @@
 
 #include "mypthread.h"
 
-//#define debug 1
+#define debug 1
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
 struct itimerval *timer = NULL;
@@ -32,6 +32,8 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
        // YOUR CODE HERE
 	   //malloc(100);
 		if(timer == NULL){
+			atexit(freeGlob);
+
 			queue = (heap*) malloc(sizeof(heap));
 			queue->size = 0;
 			count = 1;
@@ -62,6 +64,7 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 		block->priority = 0;
 		block->blocker = 0;
 		block->mutex = NULL;
+		block->returnValue = NULL;
 
 		//Initialize Context variables
 		ucontext_t *cctx = malloc(sizeof(ucontext_t));
@@ -101,6 +104,7 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 			
 			makecontext(schedctx, (void*) &schedule, 0);
 			makecontext(ex, (void*) &mypthread_exit, 0);
+
 			//Initialize timer vars
 			timer = malloc(sizeof(struct itimerval));
 			timer->it_interval.tv_usec = 0;
@@ -115,9 +119,10 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 			mblock->priority = 0;
 			mblock->blocker = 0;
 			mblock->mutex = NULL;
+			mblock->returnValue = NULL;
 			ucontext_t *mcctx = malloc(sizeof(ucontext_t));
 			void* mstack = malloc(STACK_SIZE);
-			mcctx->uc_link = NULL; //set to freeglob context
+			mcctx->uc_link = NULL;
 			mcctx->uc_stack.ss_sp = mstack;
 			mcctx->uc_stack.ss_size = STACK_SIZE;
 			mcctx->uc_stack.ss_flags = 0;
@@ -164,19 +169,15 @@ void mypthread_exit(void *value_ptr) {
 	// YOUR CODE HERE
 	stopTimer();
 	//In pushBack, set all blocked threads to contain this value_ptr;
-	pushBackThread(blockList, queue, current);
+	pushBackThread(blockList, queue, current, value_ptr);
 	#ifdef debug 
 		printf("Succesful pushback\n");
 	#endif
 	free(current->context->uc_stack.ss_sp);
 	free(current->context);
+	// if(current->returnValue != NULL) free(current->returnValue);
 	free(current);
 	current = NULL;
-	//does ucontext store a return value
-	//Set all blockers
-	if (value_ptr != NULL){
-		*((int*)value_ptr) = 0;
-	}
 	setcontext(schedctx);
 	return;
 };
@@ -203,9 +204,10 @@ int mypthread_join(mypthread_t thread, void **value_ptr) {
 		#endif
 		current = NULL;
 		swapcontext(temp->context, schedctx);
-		//When we switch back, the blocker thread has finished execution
-		//PthreadExit should have set a value in this thread's tcb
-		//set value_ptr equal to that return value. (watch out for malloc/out-of-scope issues)
+		//Current comes back into running. We pick up where we left off.
+		if(value_ptr != NULL){
+			*value_ptr = current->returnValue;
+		}
 	} else{
 		#ifdef debug
 			printf("Didnt find thread_id %d\n", thread);
@@ -453,6 +455,20 @@ int findThread(mypthread_t threadId){
 //free blocklist, contexts, globs
 //call when main exits
 void freeGlob(){
+	if(current != NULL){
+		free(current->context->uc_stack.ss_sp);
+		free(current->context);
+		// if(current->returnValue != NULL) free(current->returnValue);
+		free(current);
+	}
+	printf("In free glob");
+	free(timer);
+	free(queue);
+	free(schedctx->uc_stack.ss_sp);
+	free(schedctx);
+	free(ex->uc_stack.ss_sp);
+	free(ex);
+	free(blockList);
 	return;
 }
 
@@ -466,7 +482,7 @@ int nodeInsert(node** head, tcb* t){
 }
 
 //head is global, queue is global, pls dfix
-int pushBackThread(node** head, heap* queue, tcb* t){
+int pushBackThread(node** head, heap* queue, tcb* t, void* returnPtr){
 	if (*head == NULL){
 		return -1;
 	}
@@ -481,6 +497,8 @@ int pushBackThread(node** head, heap* queue, tcb* t){
 		if(ptr->thread->blocker == threadExitId){
 			ptr->thread->status = WAITING;
 			ptr->thread->blocker = 0;
+			ptr->thread->returnValue = returnPtr;
+
 			prev->next = ptr->next;
 			insert(queue, ptr->thread);
 			free(ptr);
@@ -496,6 +514,8 @@ int pushBackThread(node** head, heap* queue, tcb* t){
 		//printf("Found head in pushback. Queue size = %d.\n", queue->size);
 		ptr->thread->status = WAITING;
 		ptr->thread->blocker = 0;
+		ptr->thread->returnValue = returnPtr;
+
 		insert(queue, ptr->thread);
 		*head = ptr->next;
 		free(ptr);

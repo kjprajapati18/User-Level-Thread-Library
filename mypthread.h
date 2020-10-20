@@ -11,7 +11,7 @@
 
 /* To use Linux pthread Library in Benchmark, you have to comment the USE_MYTHREAD macro */
 #define USE_MYTHREAD 1
-#define RESET_TIME 10
+#define RESET_TIME 10000
 /* include lib header files that you need here: */
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -53,6 +53,7 @@ typedef struct threadControlBlock {
 	state status;
 	ucontext_t *context;
 	int priority;
+	void* returnValue;
 	mypthread_t blocker;
 	mypthread_mutex_t *mutex;
 	//Create a field to get blocker's return value;
@@ -78,7 +79,7 @@ typedef struct _node{
 
 int nodeInsert(node** head, tcb* t);
 
-int pushBackThread(node** head, heap* queue, tcb* t);
+int pushBackThread(node** head, heap* queue, tcb* t, void* returnPtr);
 
 int pushBackMutex(node** head, heap* queue, mypthread_mutex_t* m);
 // YOUR CODE HERE

@@ -11,7 +11,7 @@
 
 /* To use Linux pthread Library in Benchmark, you have to comment the USE_MYTHREAD macro */
 #define USE_MYTHREAD 1
-#define RESET_TIME 1000
+#define RESET_TIME 10
 /* include lib header files that you need here: */
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -30,6 +30,15 @@ typedef uint mypthread_t;
 
 typedef enum _state {BLOCKED, WAITING, RUNNING} state;
 
+/* mutex struct definition */
+typedef struct mypthread_mutex_t {
+	/* add something here */
+	int init;
+	int* lock_status;
+
+	// YOUR CODE HERE
+} mypthread_mutex_t;
+
 typedef struct threadControlBlock {
 	/* add important states in a thread control block */
 	// thread Id
@@ -45,18 +54,9 @@ typedef struct threadControlBlock {
 	ucontext_t *context;
 	int priority;
 	mypthread_t blocker;
+	mypthread_mutex_t *mutex;
 	//Create a field to get blocker's return value;
 } tcb;
-
-/* mutex struct definition */
-typedef struct mypthread_mutex_t {
-	/* add something here */
-	int init;
-	mypthread_t thread_id;
-	int* lock_status;
-
-	// YOUR CODE HERE
-} mypthread_mutex_t;
 
 /* define your data structures here: */
 // Feel free to add your own auxiliary data structures (linked list or queue etc...)
@@ -78,7 +78,9 @@ typedef struct _node{
 
 int nodeInsert(node** head, tcb* t);
 
-int pushBack(node** head, heap* queue, tcb* t);
+int pushBackThread(node** head, heap* queue, tcb* t);
+
+int pushBackMutex(node** head, heap* queue, mypthread_mutex_t* m);
 // YOUR CODE HERE
 
 void stopTimer();

@@ -12,9 +12,14 @@
  */
 int* p;
 mypthread_t *thread, *thread2, *thread0, *thread4;
+mypthread_mutex_t *m;
 int max = 4;
+
 void* foo(){
 	int x = 0;
+	mypthread_mutex_lock(m);
+	*p = 6;
+	mypthread_mutex_unlock(m);
 	while(x < max){
 		printf("%d. foo\n", x);
 		x++;
@@ -24,6 +29,9 @@ void* foo(){
 }
 void* beef(){
 	printf("Beef waits for foo\n");
+	mypthread_mutex_lock(m);
+	*p = 7;
+	mypthread_mutex_unlock(m);
 	mypthread_join(*thread, NULL);
 	printf("Beef sees foo is finished. Beef starts\n");
 	int x = 0;
@@ -36,7 +44,11 @@ void* miggy(){
 	// printf("Miggy waits for foo\n");
 	// mypthread_join(*thread, NULL);
 	// printf("Miggy sees foo is finished. Miggy waits for beef\n");
-	mypthread_join(*thread4, NULL);
+	printf("asdf\n");
+	mypthread_mutex_lock(m);
+	*p = 8;
+	mypthread_mutex_unlock(m);
+	mypthread_join(*thread2, NULL);
 	printf("Miggy sees beef is finished. Miggy starts\n");
 	int x =0;
 	while(x < max){
@@ -46,6 +58,9 @@ void* miggy(){
 }
 void* geet(){
 	int x = 0;
+	mypthread_mutex_lock(m);
+	*p = *p + 1;
+	mypthread_mutex_unlock(m);
 	// printf("Geet waits for foo\n");
 	// mypthread_join(*thread, NULL);
 	// printf("Geet sees foo finished. Geet waits for beef\n");
@@ -63,6 +78,9 @@ void* geet(){
 int main(int argc, char **argv) {
 
 	/* Implement HERE */
+	m = malloc(sizeof(mypthread_mutex_t));
+	mypthread_mutex_init(m, NULL);
+
 	p = (int*) malloc(sizeof(int));
 	*p = 5;
 
@@ -71,6 +89,7 @@ int main(int argc, char **argv) {
 	thread0 = malloc(sizeof(mypthread_t));
 	thread4 = malloc(sizeof(mypthread_t));
 
+		
 	mypthread_create(thread0, NULL, miggy, NULL);
 	mypthread_create(thread2, NULL, beef, NULL);
 	mypthread_create(thread, NULL, foo, NULL);
@@ -86,9 +105,11 @@ int main(int argc, char **argv) {
 	// mypthread_join(*thread0, NULL);
 	// printf("main sees miggy finished. main waits for geet\n");
 	//mypthread_join(*thread4, NULL);
+	mypthread_mutex_lock(m);
 	mypthread_yield();
 	mypthread_yield();
 	mypthread_yield();
+	mypthread_mutex_unlock(m);
 	mypthread_join(*thread4, NULL);
 
 	printf("main sees geet finished. main starts\n");
@@ -97,7 +118,8 @@ int main(int argc, char **argv) {
 		printf("%d. krish\n", x);
 		x++;
 	}
-	malloc(3);
+	printf("P: %d\n", *p);
+	malloc(300);
 	free(thread);
 	free(thread2);
 	free(thread0);

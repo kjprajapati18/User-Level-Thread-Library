@@ -15,7 +15,7 @@
 
 
 //#define debug 1
-#define LL 1
+//#define LL 1
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
 struct itimerval *timer = NULL;
@@ -270,8 +270,9 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
         // context switch to the scheduler thread
 
         // YOUR CODE HERE
-		// stopTimer();
-		signal(SIGPROF, SIG_IGN);
+		//uncomment this and 288 if you want to increase runtime by an order of magnitude. 
+		// stopTimer(); 
+		//signal(SIGPROF, SIG_IGN);
 		while(__sync_lock_test_and_set(mutex->lock_status, 1)){
 			
 			current->status = BLOCKED;
@@ -284,7 +285,7 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
 		}
 		//resumeTimer();
 		// restartTimer();
-		sigaction(SIGPROF, _sa, NULL);
+		//sigaction(SIGPROF, _sa, NULL);
 		//check if test and set sets it to 1;
 		//printf("lock: %d", *(mutex->lock_status));
         return 0;

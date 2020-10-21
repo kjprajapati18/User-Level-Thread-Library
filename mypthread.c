@@ -8,15 +8,18 @@
 
 
 //#define debug 1
+//#define LL 1
 // INITAILIZE ALL YOUR VARIABLES HERE
 // YOUR CODE HERE
 struct itimerval *timer = NULL;
 struct sigaction *_sa;
+node** pqhead;
 heap* queue;
 ucontext_t* schedctx;
 ucontext_t* ex;
 node** blockList;
 tcb* current;
+
 //asign to 0
 uint count;
 
@@ -34,9 +37,13 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 
 		if(timer == NULL){
 			atexit(freeGlob);
-
+			#ifdef LL
+			pqhead = (node**) malloc(sizeof(node*));
+			*pqhead = NULL;
+			#else
 			queue = (heap*) malloc(sizeof(heap));
 			queue->size = 0;
+			#endif
 			count = 1;
 			
 			//Set up mypthread_exit context
@@ -80,8 +87,11 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 		}
 		makecontext(cctx, function, 1, arg);
 		block->context = cctx;
+		#ifdef LL
+		LLinsert(block);
+		#else
 		insert(queue, block);
-
+		#endif
 		//timer setup
     	if(timer == NULL){
 			//First thread is being created
@@ -132,6 +142,7 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 			node** head = malloc(sizeof(node*));
 			blockList = head;
 			*blockList = NULL;
+
 			//Start timer, set context of main
 			setitimer(ITIMER_PROF, timer, NULL);
 			if (getcontext(mcctx) < 0){
@@ -243,9 +254,8 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
 
         // YOUR CODE HERE
 		
-		signal(SIGPROF, SIG_IGN);
 		while(__sync_lock_test_and_set(mutex->lock_status, 1)){
-			
+			signal(SIGPROF, SIG_IGN);
 			current->status = BLOCKED;
 			current->blocker = 0;
 			current->mutex = mutex;
@@ -254,9 +264,7 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
 			current = NULL;
 			swapcontext(temp->context, schedctx);
 		}
-		
-		sigaction(SIGPROF, _sa, NULL);
-		
+
         return 0;
 };
 
@@ -311,7 +319,11 @@ static void schedule() {
 	}
 	#ifdef debug
 		printLL();
+		#ifdef LL
+		printPQ();
+		#else
 		printHeap();
+		#endif
 	#endif
 	// schedule policy
 	#ifndef MLFQ
@@ -334,7 +346,11 @@ static void sched_stcf() {
 	// (feel free to modify arguments and return types)
 
 	// YOUR CODE HERE
+	#ifdef LL
+	tcb* next = LLpop();
+	#else
 	tcb* next = pop(queue);
+	#endif
 	//current is null and next is null we need to return to main to finish code
 	//We actually don't need this since main should always join all threads
 	if (current == NULL && next == NULL && *blockList == NULL){
@@ -351,7 +367,11 @@ static void sched_stcf() {
 	
 	//If next is NULL, keep current as is (nothing else can run). Otherwise switch to next.
 	if (next != NULL){
+		#ifdef LL
+		LLinsert(current);
+		#else
 		insert(queue, current);
+		#endif
 		current = next;
 	}
 	return;
@@ -421,13 +441,64 @@ tcb* pop(heap* queue){
     return out;
 }
 
+//LL q functions
+int LLinsert(tcb* block){
+	if(block == NULL) return 1;
+	node* newNode = malloc(sizeof(node*));
+	newNode->thread = block;
+	newNode->next = NULL;
+	node* ptr = *pqhead;
+	node* prev = NULL;
+	while(ptr != NULL){
+		if(ptr->thread->priority > block->priority) break;
+		prev = ptr;
+		ptr = ptr->next;
+	}
+	if (ptr == *pqhead){
+		newNode->next = *pqhead;
+		*pqhead = newNode;
+	}
+	else if (ptr == NULL && prev != NULL){
+		newNode->next = NULL;
+		prev->next = newNode;
+	}
+	else
+	{
+		prev->next = newNode;
+		newNode->next = ptr;
+	}
+	return 0;
+}
+
+tcb* LLpop(){
+	if(*pqhead == NULL) return NULL;
+	node* ptr = *pqhead;
+	*pqhead = ptr->next;
+	tcb* temp = ptr->thread;
+	free(ptr);
+	return temp;
+}
+
 int findThread(mypthread_t threadId){
+	#ifdef LL
+	node* p = *pqhead;
+	while(p!=NULL){
+		mypthread_t* id = p->thread->threadId;
+		#ifdef debug
+			if (id==NULL) printf("searching main\n");
+			else printf("searching %d", *id);
+		#endif
+		if(id != NULL && *id == threadId) return 1;
+		p = p->next;
+	}
+	#else
 	int i;
 	for(i = 0; i < queue->size; i++){
 		mypthread_t* id = (queue->q[i])->threadId;
 		if(id == NULL) continue;
 		if(*id == threadId) return 1;
 	}
+	#endif
 	//Search through the block queue
 	node* ptr = *blockList;
 	while(ptr != NULL){
@@ -456,7 +527,11 @@ void freeGlob(){
 	#endif
 	free(timer);
 	free(_sa);
+	#ifdef LL
+	free(pqhead);
+	#else
 	free(queue);
+	#endif
 	free(schedctx->uc_stack.ss_sp);
 	free(schedctx);
 	free(ex->uc_stack.ss_sp);
@@ -493,7 +568,11 @@ int pushBackThread(node** head, heap* queue, tcb* t, void* returnPtr){
 			ptr->thread->returnValue = returnPtr;
 
 			prev->next = ptr->next;
+			#ifdef LL
+			LLinsert(ptr->thread);
+			#else
 			insert(queue, ptr->thread);
+			#endif
 			free(ptr);
 		}
 		else{
@@ -508,8 +587,11 @@ int pushBackThread(node** head, heap* queue, tcb* t, void* returnPtr){
 		ptr->thread->status = WAITING;
 		ptr->thread->blocker = 0;
 		ptr->thread->returnValue = returnPtr;
-
+		#ifdef LL
+		LLinsert(ptr->thread);
+		#else
 		insert(queue, ptr->thread);
+		#endif
 		*head = ptr->next;
 		free(ptr);
 	}
@@ -532,7 +614,11 @@ int pushBackMutex(node** head, heap* queue, mypthread_mutex_t* m){
 			ptr->thread->blocker = 0;
 			ptr->thread->mutex = NULL;
 			prev->next = ptr->next;
+			#ifdef LL
+			LLinsert(ptr->thread);
+			#else
 			insert(queue, ptr->thread);
+			#endif
 			free(ptr);
 		}
 		else{
@@ -547,7 +633,11 @@ int pushBackMutex(node** head, heap* queue, mypthread_mutex_t* m){
 		ptr->thread->status = WAITING;
 		ptr->thread->blocker = 0;
 		ptr->thread->mutex = NULL;
+		#ifdef LL
+		LLinsert(ptr->thread);
+		#else
 		insert(queue, ptr->thread);
+		#endif
 		*head = ptr->next;
 		free(ptr);
 	}
@@ -580,5 +670,21 @@ void printHeap(){
 	}
 	printf("END\n");
 	
+	return;
+}
+
+void printPQ(){
+	node* ptr = *pqhead;
+	printf("Run Queue: ");
+	if(ptr == NULL) printf("NULL");
+	else{
+		while(ptr!= NULL){
+			mypthread_t *id = (ptr->thread->threadId);
+			if(id == NULL) printf("MAIN -> ");
+			else printf("%d -> ", *id);
+			ptr = ptr->next;
+		}	
+	}
+	printf("END\n");
 	return;
 }

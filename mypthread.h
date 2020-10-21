@@ -69,6 +69,10 @@ int insert(heap* queue, tcb* block);
 
 tcb* pop(heap* queue);
 
+int LLinsert(tcb* block);
+
+tcb* LLpop();
+
 int findThread(mypthread_t threadId);
 
 typedef struct _node{
@@ -89,6 +93,7 @@ void ring();
 
 void printLL();
 void printHeap();
+void printPQ();
 /* Function Declarations: */
 
 /* create a new thread */

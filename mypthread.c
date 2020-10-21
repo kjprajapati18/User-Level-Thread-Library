@@ -510,6 +510,8 @@ int findThread(mypthread_t threadId){
 		if(id2 != NULL && *id2 == threadId) return 1;
 		ptr = ptr->next;
 	}
+
+	if(current->threadId != NULL && *(current->threadId) == threadId) return 1;
 	return 0;
 }
 

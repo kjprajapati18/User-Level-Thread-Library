@@ -6,7 +6,7 @@
 int* p;
 mypthread_t *thread, *thread2, *thread0, *thread4;
 mypthread_mutex_t *m;
-int max = 100000;
+int max = 1;
 
 
 int killSomeTime(int a){
@@ -18,6 +18,7 @@ int killSomeTime(int a){
 }
 
 void* foo(){
+	mypthread_yield();
     printf("Foo waits for m\n");
 	mypthread_mutex_lock(m);
 	*p = 6;
@@ -27,15 +28,20 @@ void* foo(){
 		printf("%d. foo %d\n", b, killSomeTime(b));
 		b++;
 	}
-	
-	mypthread_exit(b);
+	b= killSomeTime(b);
+	int* m = malloc(sizeof(int));
+	*m = b;
+	printf("Foo is sending %d\n", *m);
+	mypthread_exit(m);
 }
 void* beef(){
 	printf("Beef waits for m\n");
 	mypthread_mutex_lock(m);
 	*p = 7;
 	mypthread_mutex_unlock(m);//
-	mypthread_join(*thread, NULL);
+	int* a;
+	mypthread_join(*thread, &a);
+	printf("Beef got %d from foo", *a);
 	int x =0;
 	while(x < max){
 		printf("%d. beef %d\n", x, killSomeTime(x));
@@ -48,7 +54,9 @@ void* miggy(){
 	*p = 8;
 	mypthread_mutex_unlock(m);
 	int x = 0;
-	mypthread_join(*thread2, NULL);
+	int* a;
+	mypthread_join(*thread, &a);
+	printf("Miggy got %d from foo", *a);
 	while(x<max){
 		printf("%d. miggy\n", x, killSomeTime(x));
 		x++;
@@ -59,10 +67,11 @@ void* geet(){
 	mypthread_mutex_lock(m);
 	*p = *p + 1;
 	mypthread_mutex_unlock(m);
-	mypthread_join(*thread0, NULL);
-
+	int *a;
+	mypthread_join(*thread, &a);
+	printf("Geet got %d from foo", *a);
 	int x = 0;
-	while(1){
+	while(x<max){
 		printf("geet %d\n", killSomeTime(x));
 		x++;
 	}
@@ -95,12 +104,22 @@ int main(int argc, char **argv) {
 	mypthread_yield();
 	mypthread_mutex_unlock(m);
     printf("Main unlocks m\n");
-	mypthread_join(*thread0, NULL);
+	int *a;
+	mypthread_join(*thread, &a);
+	printf("Main got %d from foo", *a);
 	int x = 0;
 	while(x< max){
 		printf("%d. krish %d \n", x, killSomeTime(x));
 		x++;
 	}
-
+	mypthread_join(*thread0, NULL);
+	free(p);
+	free(thread);
+	free(thread2);
+	free(thread4);
+	free(thread0);
+	mypthread_mutex_destroy(m);
+	free(m);
+	free(a);
 	return 0;
 }

@@ -31,7 +31,7 @@ tcb* current;
 //asign to 0
 uint count;
 
-int RESET_TIME2 = 4000;
+int RESET_TIME2 = 8000;
 
 //CREATE A SCHEDULER FUNCTION. IMPLEMENT YIELD. IMPLEMENT HEAP FOR RUNQUEUE.*********************************
 
@@ -272,9 +272,8 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
         // YOUR CODE HERE
 		//uncomment this and 288 if you want to increase runtime by an order of magnitude. 
 		// stopTimer(); 
-		//signal(SIGPROF, SIG_IGN);
 		while(__sync_lock_test_and_set(mutex->lock_status, 1)){
-			
+			signal(SIGPROF, SIG_IGN);
 			current->status = BLOCKED;
 			current->blocker = 0;
 			current->mutex = mutex;

@@ -2,7 +2,7 @@
 
 // List all group member's name: Krishna Prajapati, Rakshay Kanthadai
 // username of iLab: kjp189, rsk146
-// iLab Server: 
+// iLab Server: ilab3
 
 #ifndef MYTHREAD_T_H
 #define MYTHREAD_T_H
@@ -83,13 +83,10 @@ int pushBackThread(node** head, heap* queue, tcb* t, void* returnPtr);
 int pushBackMutex(node** head, heap* queue, mypthread_mutex_t* m);
 // YOUR CODE HERE
 
-//void stopTimer();
 
 void ring();
 
-//void restartTimer();
 
-//void resumeTimer();
 void printLL();
 void printHeap();
 /* Function Declarations: */

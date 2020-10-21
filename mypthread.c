@@ -6,13 +6,6 @@
 
 #include "mypthread.h"
 
-//STUFF LEFT TO DO::
-//	-Maybe make timer not be global. See if local timers help fix problem (i dont see why it would)
-//	-Delete all unnecssary comments such as this one
-//	-Finish writing report
-//	-One last test with all functions
-//	-Submit everything needed
-
 
 //#define debug 1
 // INITAILIZE ALL YOUR VARIABLES HERE
@@ -20,7 +13,6 @@
 struct itimerval *timer = NULL;
 struct sigaction *_sa;
 heap* queue;
-//assign to 0
 ucontext_t* schedctx;
 ucontext_t* ex;
 node** blockList;
@@ -30,7 +22,6 @@ uint count;
 
 int RESET_TIME2 = 8000;
 
-//CREATE A SCHEDULER FUNCTION. IMPLEMENT YIELD. IMPLEMENT HEAP FOR RUNQUEUE.*********************************
 
 /* create a new thread */
 int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
@@ -40,7 +31,7 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
        // allocate space of stack for this thread to run
        // after everything is all set, push this thread int
        // YOUR CODE HERE
-	   //malloc(100);
+
 		if(timer == NULL){
 			atexit(freeGlob);
 
@@ -59,10 +50,8 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 				perror("getcontextEXIT");
 				return -1;
 			}
-		} /*else {
-			//Prevent thread switch
-			stopTimer();
-		}*/
+		} 
+		
 		//Malloc space for tcb. Pointer in run queue
 		tcb* block = (tcb*) malloc(sizeof(tcb));
 
@@ -149,11 +138,7 @@ int mypthread_create(mypthread_t * thread, pthread_attr_t * attr,
 				perror("getcontextMAIN");
 				return -1;
 			}
-		} /*else {
-			//Resume timer since we stopped it to prevent thread switches
-			//resumeTimer();
-			restartTimer();
-		}*/
+		} 
 
     return 0;
 };
@@ -165,11 +150,10 @@ int mypthread_yield() {
 	// save context of this thread to its thread control block
 	// wwitch from thread context to scheduler context
 	// YOUR CODE HERE
-	// stopTimer();
+
 	signal(SIGPROF, SIG_IGN);
 	swapcontext(current->context, schedctx);
-	//Pause Timer (so we cant get interrupted while calling yield)***********************
-	//Swap context to scheduler context just before the return***************************
+
 	return 0;
 };
 
@@ -180,16 +164,16 @@ void mypthread_exit(void *value_ptr) {
 	// Deallocated any dynamic memory created when starting this thread
 	
 	// YOUR CODE HERE
-	//stopTimer();
+
 	signal(SIGPROF, SIG_IGN);
-	//In pushBack, set all blocked threads to contain this value_ptr;
+
 	pushBackThread(blockList, queue, current, value_ptr);
 	#ifdef debug 
 		printf("Succesful pushback\n");
 	#endif
 	free(current->context->uc_stack.ss_sp);
 	free(current->context);
-	// if(current->returnValue != NULL) free(current->returnValue);
+
 	free(current);
 	current = NULL;
 	setcontext(schedctx);
@@ -204,7 +188,7 @@ int mypthread_join(mypthread_t thread, void **value_ptr) {
 	// de-allocate any dynamic memory created by the joining thread
 
 	// YOUR CODE HERE
-	// stopTimer();
+
 	signal(SIGPROF, SIG_IGN);
 	int threadExists = findThread(thread);
 
@@ -229,8 +213,7 @@ int mypthread_join(mypthread_t thread, void **value_ptr) {
 			printf("Didnt find thread_id %d\n", thread);
 		#endif
 		sigaction(SIGPROF, _sa, NULL);
-		//resumeTimer();
-		// restartTimer();
+		
 	}
 	return 0;
 };
@@ -259,7 +242,7 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
         // context switch to the scheduler thread
 
         // YOUR CODE HERE
-		// stopTimer();
+		
 		signal(SIGPROF, SIG_IGN);
 		while(__sync_lock_test_and_set(mutex->lock_status, 1)){
 			
@@ -271,11 +254,9 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
 			current = NULL;
 			swapcontext(temp->context, schedctx);
 		}
-		//resumeTimer();
-		// restartTimer();
+		
 		sigaction(SIGPROF, _sa, NULL);
-		//check if test and set sets it to 1;
-		//printf("lock: %d", *(mutex->lock_status));
+		
         return 0;
 };
 
@@ -292,11 +273,10 @@ int mypthread_mutex_unlock(mypthread_mutex_t *mutex) {
 	//		If the mutex gets locked before we context switch back, we'll just end up putting a thread back in to run queue that should stay in block list
 	//		However, it is stuck in the while loop in lock, and therefore will come back here eventually. In fact, it will have a better chance at competing for the next iteration
 	//		Which is fair.
-	// stopTimer();
+	
 	*(mutex->lock_status) = 0;
 	pushBackMutex(blockList, queue, mutex);
-	//resumeTimer();
-	// restartTimer();
+	
 	return 0;
 };
 
@@ -357,11 +337,9 @@ static void sched_stcf() {
 	tcb* next = pop(queue);
 	//current is null and next is null we need to return to main to finish code
 	//We actually don't need this since main should always join all threads
-	if (current == NULL && next == NULL){
+	if (current == NULL && next == NULL && *blockList == NULL){
 		//No threads running, waiting, or blocked
-		//Technically we dont need to check blocklist, but for debugging purposes we'll leave it for now. DONE WITH DEBUGGING
-		//Our fault if program doesnt terminate because join() must occur on a valid thread, and needs to get unblocked eventually (so the case where nothing in queues but stuff in block list
-		// is cuz of shitty library code that didnt unlblock)
+		
 		freeGlob();
 		exit(0);
 	}
@@ -370,7 +348,7 @@ static void sched_stcf() {
 	if (current != NULL){
 		current->priority++;
 	}
-	//printf("thred id: %u, Prio: %d\n", next->threadId, next->priority);
+	
 	//If next is NULL, keep current as is (nothing else can run). Otherwise switch to next.
 	if (next != NULL){
 		insert(queue, current);
@@ -390,26 +368,7 @@ static void sched_mlfq() {
 // Feel free to add any other functions you need
 
 // YOUR CODE HERE
-/*
-void stopTimer()
-{
-    struct itimerval zeroTimer;
-	memset(&zeroTimer, 0, sizeof(struct itimerval));
-    setitimer(ITIMER_PROF, &zeroTimer, timer);
-}
 
-void restartTimer()
-{
-	timer->it_interval.tv_usec = 0;
-	timer->it_interval.tv_sec = 0;
-	timer->it_value.tv_usec = RESET_TIME2;
-    timer->it_value.tv_sec = 0;
-    setitimer(ITIMER_PROF, timer, NULL);
-}
-
-void resumeTimer(){
-	setitimer(ITIMER_PROF, timer, NULL);
-}*/
 
 void ring(){
 	//Pause Timer************************************************************************
@@ -423,7 +382,7 @@ void ring(){
 	return;
 }
 
-//heap functions so we don't have to edit makefile
+//heap functions
 
 int insert(heap* queue, tcb* block){
 	if(block == NULL) return -1;
@@ -490,7 +449,6 @@ void freeGlob(){
 	if(current != NULL){
 		free(current->context->uc_stack.ss_sp);
 		free(current->context);
-		// if(current->returnValue != NULL) free(current->returnValue);
 		free(current);
 	}
 	#ifdef debug
@@ -507,7 +465,7 @@ void freeGlob(){
 	return;
 }
 
-//head is global, pls dleete
+
 int nodeInsert(node** head, tcb* t){
 	node* newNode = (node*) malloc(sizeof(node));
 	newNode->thread = t;
@@ -516,7 +474,7 @@ int nodeInsert(node** head, tcb* t){
 	return 0;
 }
 
-//head is global, queue is global, pls dfix
+
 int pushBackThread(node** head, heap* queue, tcb* t, void* returnPtr){
 	if (*head == NULL){
 		return -1;
@@ -546,7 +504,7 @@ int pushBackThread(node** head, heap* queue, tcb* t, void* returnPtr){
 	//checking head last
 	ptr = *head;	
 	if(ptr->thread->blocker == threadExitId){
-		//printf("Found head in pushback. Queue size = %d.\n", queue->size);
+		
 		ptr->thread->status = WAITING;
 		ptr->thread->blocker = 0;
 		ptr->thread->returnValue = returnPtr;
@@ -585,7 +543,7 @@ int pushBackMutex(node** head, heap* queue, mypthread_mutex_t* m){
 	//checking head last
 	ptr = *head;	
 	if(ptr->thread->mutex == m){
-		//printf("Found head in pushback. Queue size = %d.\n", queue->size);
+		
 		ptr->thread->status = WAITING;
 		ptr->thread->blocker = 0;
 		ptr->thread->mutex = NULL;
@@ -621,6 +579,6 @@ void printHeap(){
 		else printf("%d -> ", *id);
 	}
 	printf("END\n");
-	//Search through the block queue
+	
 	return;
 }
